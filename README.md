@@ -26,12 +26,12 @@ This works (try it out!), but there are several things to improve on here:
     It's OK for our program to take seconds or even minutes to get
     started, but once that's done, individual queries should be blazing fast.
 
-* - **Search quality.** `grep` doesn't tell us which document mentions
+*   **Search quality.** `grep` doesn't tell us which document mentions
     "traffic" the most (Bangkok) or which ones mention both "traffic"
     and "waffles" (in this sample, only "Brussels" and "Snoop Dogg").
     It doesn't sort results by relevance.
 
-*   **Result presentation.** `grep` doesn't even show the title of the
+*   **Result presentation.** `grep` doesn't even show the titles of
     articles. We can do better.
 
 All this may sound really hard. But it's not! This repository contains some
