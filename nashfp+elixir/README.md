@@ -18,7 +18,7 @@ iex(2)&gt; <strong>Elindex.Searcher.search("launch")</strong>
 [{"1971", 4}, {"2012–13 NHL season", 2}, {"Antrim GAA", 1},
  {"Big Ten Network", 8}, {"Boris Becker", 1}, {"Bryan Adams", 1},
  {"ESPN.com", 2}, {"Huntsville, Alabama", 1}, {"IGN", 3}, {"Johor Bahru", 1}]
-```
+</pre>
 
 (To exit `iex`, hit Ctrl-C twice.)
 
