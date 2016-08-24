@@ -1,1 +1,5 @@
 sample
+.idea
+potetm+clojure/target
+potetm+clojure/search-engine.iml
+potetm+clojure/.nrepl-port
