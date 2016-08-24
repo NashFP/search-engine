@@ -14,43 +14,51 @@ defmodule Elindex.Searcher do
     end)
   end
 
+  def tokenize(text) do
+    Regex.scan(~r(\b[A-Za-z]+\b), text)
+    |> Enum.map(&List.first/1)
+    |> Enum.map(&String.downcase/1)
+  end
+
   def load_all_files do
-    # [ 
-    #    { "American football", [ "american", "football", ... ] },
-    #    { "Snoop Dogg", [ "brussels", "belgium", ... ] }
-    # ]
-    File.ls!("sample")
-    |> Enum.take(300)
-    |> IO.inspect
+    sample_dir = "../sample"
+
+    File.ls!(sample_dir)
+    |> Enum.take(300)  # HACK 1 - limit to 300 files
+    # Output of this stage looks like this:
+    # [ "0001.txt", "0002.txt", "0003.txt", ...thousands...]
+
     |> Enum.map(fn(filename) ->
-      text = Path.join("sample", filename)
-             |> File.read!
-      title = String.split(text, "\n", parts: 2) |> List.first
-      words = tokenize(text) |> Enum.take(3000)
-      {title, words}
-    end)
+         text = Path.join(sample_dir, filename)
+                |> File.read!
+         title = String.split(text, "\n", parts: 2) |> List.first
+         words = tokenize(text)
+                 |> Enum.take(3000)  # HACK 2 - limit to first 3,000 words
+         {title, words}
+       end)
+    # [
+    #    { "American football", [ "american", "football", ... ] },
+    #    { "Snoop Dogg", [ "brussels", "belgium", ... ] },
+    #    ...
+    # ]
 
-    |> IO.inspect
-
+    |> Enum.flat_map(fn({title, words}) ->
+         Enum.map(words, fn (word) -> {title, word} end)
+       end)
     # [
     #    { "American football", "american" },
     #    { "American football", "football" },
     #    { "Snoop Dogg", "brussels" },
-    #    ... millions ...
+    #    ... zillions ...
     # ]
-    |> Enum.flat_map(fn({title, words}) ->
-         Enum.map(words, fn (word) -> {title, word} end)
-       end)
 
-    |> IO.inspect
-
-    # %{
-    #   "waffles" => ["Belgium", "Snoop Dogg", ...],
-    #   "traffic" => ["Belgium", "Myspace", ...]]
-    #  }
     |> Enum.group_by(fn ({_, word}) -> word end,
                      fn ({title, _}) -> title end)
-    |> IO.inspect
+    # %{
+    #   "waffles" => ["Belgium", "Snoop Dogg", ...],
+    #   "traffic" => ["Belgium", "Myspace", ...],
+    #   ... millions more terms ...
+    # }
 
     |> Enum.map(fn ({term, titles}) ->
          {
@@ -62,7 +70,11 @@ defmodule Elindex.Searcher do
                        end)
          }
        end)
-    |> IO.inspect
+    # [
+    #   {"waffles", %{"Belgium" => 4, "Snoop Dogg" => 7, ...}},
+    #   {"traffic", %{"Belgium" => 7, "Myspace" => 3, ...}},
+    #   ... millions ...
+    # ]
 
     # %{
     #   "waffles" => %{ "Snoop Dogg" => 5, ... },
@@ -70,23 +82,4 @@ defmodule Elindex.Searcher do
     # }
     |> Enum.into(%{})
   end
-
-  def tokenize(text) do
-    Regex.scan(~r(\b[A-Za-z]+\b), text)
-    |> Enum.map(&List.first/1)
-    |> Enum.map(&String.downcase/1)
-  end
-
-  ## def search(word) do
-  ##        |> hit_info(word)
-  ##   |> Stream.filter(fn({count, _}) -> count > 0 end)
-  ##   |> Enum.sort(&>=/2)
-  ##   |> Enum.take(10)
-  ## end
-
-  ## def hit_info(blob, word) do
-  ##   count = Enum.count()
-  ##   title = String.split(blob, "\n") |> List.first
-  ##   {count, title}
-  ## end
 end
