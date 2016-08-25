@@ -15,6 +15,16 @@ tar xjvf sample.tar.bz2
 popd
 ```
 
+Then you can just run the tests:
+
+```sh
+mix test
+```
+
+This will load the files, search for 'launch', and confirm that it has the
+results it should have.  If you wanted to do this in the shell, you could do the
+following:
+
 ```sh
 iex -S mix
 ```
