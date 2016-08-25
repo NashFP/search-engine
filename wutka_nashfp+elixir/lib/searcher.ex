@@ -55,7 +55,7 @@ defmodule Elindex.Searcher do
            # Reduce each member of the word map into the map of all words
            Enum.reduce(wordmap, counts,
                fn ({word,count},c) ->
-                  Map.update(c, word, [{title,count}], &(Enum.concat([{title,count}],&1)))
+                  Map.update(c, word, [{title,count}], &([{title,count}|&1]))
                end)
         end)
   end
