@@ -1,4 +1,8 @@
 defmodule Elindex.Searcher do
+  @hack_words 3_000 # HACK 2 - limit to first 3,000 words
+  @hack_files 300 # HACK 1 - limit to 300 files
+  @sample_dir "../sample"
+
   def load_files do
     Agent.start_link(&load_all_files/0, name: :wikipedia)
   end
@@ -20,22 +24,20 @@ defmodule Elindex.Searcher do
     |> Enum.map(&String.downcase/1)
   end
 
-  def load_all_files do
-    sample_dir = "../sample"
+  def extract_title_and_words_from_file(filename) do
+    with {:ok, text} <- Path.join(@sample_dir, filename) |> File.read,
+         title <- String.split(text, "\n", parts: 2) |> hd,
+         words <- tokenize(text) |> Enum.take(@hack_words),
+         do: { title, words }
+  end
 
-    File.ls!(sample_dir)
-    |> Enum.take(300)  # HACK 1 - limit to 300 files
+  def load_all_files do
+    File.ls!(@sample_dir)
+    |> Enum.take(@hack_files)
     # Output of this stage looks like this:
     # [ "0001.txt", "0002.txt", "0003.txt", ...thousands...]
 
-    |> Enum.map(fn(filename) ->
-         text = Path.join(sample_dir, filename)
-                |> File.read!
-         title = String.split(text, "\n", parts: 2) |> List.first
-         words = tokenize(text)
-                 |> Enum.take(3000)  # HACK 2 - limit to first 3,000 words
-         {title, words}
-       end)
+    |> Enum.map(&extract_title_and_words_from_file/1)
     # [
     #    { "American football", [ "american", "football", ... ] },
     #    { "Snoop Dogg", [ "brussels", "belgium", ... ] },
