@@ -1,14 +1,20 @@
 (ns com.potetm.search-engine
-  (:require [clojure.java.io :as io]
-            [clojure.string :as str])
-  (:import [java.util Scanner]))
+  (:require [clojure.string :as str])
+  (:import [java.util Scanner]
+           [java.nio.charset StandardCharsets]
+           [java.nio.file Files
+                          FileSystem
+                          FileSystems]))
 
 (defn title [^String s]
   (subs s 0 (.indexOf s (int \newline))))
 
+(defn normalize [^String s]
+  (.toLowerCase s))
+
 (defn tokenize-and-rank [^String s]
   (frequencies (re-seq #"[0-9a-z]+"
-                       (.toLowerCase s))))
+                       (normalize s))))
 
 (defn build-index [files]
   (reduce (fn [index {:keys [::doc-id ::filename ::title ::tokens-and-rank]}]
@@ -26,14 +32,22 @@
                        tokens-and-rank))
           {}
           ;; here there be parallelization
-          (pmap (fn [i f]
-                  (let [contents (slurp f)]
-                    {::doc-id i
-                     ::filename f
-                     ::title (title contents)
-                     ::tokens-and-rank (tokenize-and-rank contents)}))
+          (pmap (fn [i {:keys [::filename ::file-contents]}]
+                  {::doc-id i
+                   ::filename filename
+                   ::title (title file-contents)
+                   ::tokens-and-rank (tokenize-and-rank file-contents)})
                 (range)
                 files)))
+
+(defn read-files [^FileSystem fs ^String search-dir]
+  (let [path (.getPath fs search-dir (make-array String 0))]
+    (map (fn [p]
+           {::filename (str p)
+            ::file-contents (String. (Files/readAllBytes p)
+                                     StandardCharsets/UTF_8)})
+         (Files/newDirectoryStream path))))
+
 
 (defn search [{:keys [::doc-id->display-info
                       ::inverted-index]}
@@ -45,28 +59,28 @@
             ::title title
             ::rank rank}))
        (sort-by second >
-                (get inverted-index (.toLowerCase word)))))
+                (get inverted-index
+                     (normalize word)))))
 
 (defn -main [& [search-dir]]
-  {:pre [(.isDirectory (io/file search-dir))]}
-  (let [search-dir (io/file search-dir)
+  (let [fs (FileSystems/getDefault)
         scanner (Scanner. System/in)
         wrap-build-index (fn []
                            (println "building index...")
                            (let [t (System/currentTimeMillis)
-                                 idx (build-index (map (partial io/file search-dir)
-                                                       (.list search-dir)))]
+                                 idx (build-index (read-files fs
+                                                              search-dir))]
                              (println (str "finished building index, took: "
                                            (- (System/currentTimeMillis) t)
                                            " msecs"))
                              idx))
-        index (wrap-build-index)
         format-results (fn [results]
                          (str/join "\n"
                                    (take 10
                                          (map (fn [{:keys [::filename ::title ::rank]}]
                                                 (str "    " filename " - " title " - " rank))
-                                              results))))]
+                                              results))))
+        index (wrap-build-index)]
     (while true
       (print "> ")
       (flush)
