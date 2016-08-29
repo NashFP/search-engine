@@ -74,7 +74,6 @@ addToIndex index (title,wordMap) =
   foldl' addItem index (Map.toList wordMap)
     where
       addItem currIndex (word,count) = Map.insertWith (++) word [(title,count)] currIndex
-
 -- Takes a list of file indexes and adds them to an existing word index
 createIndex :: WordIndex -> [(ByteString, FileIndex)] -> WordIndex
 createIndex startMap wordMaps =
