@@ -24,9 +24,9 @@ stack exec searcher-exe
 
 If you play around with trying to track down the lazy data, you may want to run it with
 a heap restriction in place, like:
-stack exec -- searcher-exe +RTS -M8G -RTS
+stack exec -- searcher-exe +RTS -M8G
 
-Once it loads (almost 4 minutes on my 16-core, 16G machine), it will prompt for a search
+Once it loads (almost 4 minutes on my 8-core, 16G machine), it will prompt for a search
 term and will print the top 10 results:
 
 To try it out:
