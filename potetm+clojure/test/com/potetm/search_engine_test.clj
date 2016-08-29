@@ -26,20 +26,24 @@
                      :actual result#}))
        result#)))
 
+(def filename-parts-gen
+  (gen/vector (gen/such-that (complement str/blank?)
+                             gen/string-alphanumeric)
+              1
+              20))
+
 (defn read-files-gen []
-  ;; todo: check unanticipated directory structure
-  (gen/bind (sgen/tuple (gen/such-that (complement str/blank?) gen/string-alphanumeric)
-                        (gen/list (sgen/tuple (gen/such-that (complement str/blank?) gen/string-alphanumeric)
-                                              (gen/list gen/string-alphanumeric))))
-            (fn [[search-dir files]]
+  (gen/bind (sgen/tuple filename-parts-gen
+                        (gen/list (sgen/tuple filename-parts-gen
+                                              (spec/gen ::se/article))))
+            (fn [[search-dir-parts files]]
               (let [fs (Jimfs/newFileSystem (Configuration/unix))
-                    search-path (nio2/path fs search-dir)]
-                (nio2/create-dir search-path)
-                (doseq [[f contents] files]
-                  (let [p (nio2/path search-path f)]
-                    (nio2/create-file p)
-                    (nio2/write-lines p contents StandardCharsets/UTF_8)))
-                (gen/return [fs search-dir])))))
+                    search-path (apply nio2/path fs search-dir-parts)]
+                (doseq [[file-parts contents] files]
+                  (let [p (apply nio2/path search-path file-parts)]
+                    (nio2/create-dirs (.getParent p))
+                    (nio2/write-lines p [contents] StandardCharsets/UTF_8)))
+                (gen/return [fs (str search-path)])))))
 
 (deftest generated-tests
   (testing "generated-tests"

@@ -210,13 +210,13 @@
   [^FileSystem fs ^String search-dir]
   (let [search-path (path fs search-dir)]
     (keep (fn [p]
-            (let [article (String. (Files/readAllBytes p)
-                                   StandardCharsets/UTF_8)]
-              (when (and (Files/isRegularFile p
-                                              (make-array LinkOption 0))
-                         (spec/valid? ::article article))
-                {::filename (str p)
-                 ::article article})))
+            (when (Files/isRegularFile p
+                                       (make-array LinkOption 0))
+              (let [article (String. (Files/readAllBytes p)
+                                     StandardCharsets/UTF_8)]
+                (when (spec/valid? ::article article)
+                  {::filename (str p)
+                   ::article article}))))
           (iterator-seq (.iterator (Files/list search-path))))))
 
 (spec/def ::search-result
