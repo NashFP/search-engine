@@ -26,46 +26,6 @@
                      :actual result#}))
        result#)))
 
-(defn article-gen []
-  (sgen/fmap (fn [[s1 s2]]
-               (str s1 "\n" s2))
-             (sgen/tuple (sgen/string)
-                         (sgen/string))))
-
-(defn token-gen []
-  (sgen/fmap str/lower-case
-             (sgen/string-alphanumeric)))
-
-(defn search-args-gen []
-  (let [gen-index (sgen/fmap (fn [index]
-                               (let [doc-ids (set (mapcat (comp keys second)
-                                                          index))]
-                                 {::se/doc-id->attributes (if (seq doc-ids)
-                                                            (sgen/generate
-                                                              (spec/gen ::se/doc-id->attributes
-                                                                        {::se/doc-id #(spec/gen doc-ids)}))
-                                                            {})
-                                  ::se/inverted-index index}))
-                             (spec/gen ::se/inverted-index
-                                       {::se/token token-gen}))]
-    (sgen/fmap (fn [[index include-word? rando-word]]
-                 (let [inverted-index-keys (set (keys (::se/inverted-index index)))]
-                   [index (if (and include-word? (seq inverted-index-keys))
-                            (sgen/generate (spec/gen inverted-index-keys))
-                            rando-word)]))
-               (sgen/tuple gen-index
-                           (sgen/boolean)
-                           (sgen/string-alphanumeric)))))
-
-(defn file-gen []
-  (gen/vector-distinct-by ::se/filename
-                          (gen/fmap (fn [[filename article]]
-                                      {::se/filename filename
-                                       ::se/article article})
-                                    (gen/tuple (gen/such-that (complement str/blank?)
-                                                              gen/string-alphanumeric)
-                                               (article-gen)))))
-
 (defn read-files-gen []
   ;; todo: check unanticipated directory structure
   (gen/bind (sgen/tuple (gen/such-that (complement str/blank?) gen/string-alphanumeric)
@@ -81,30 +41,13 @@
                     (nio2/write-lines p contents StandardCharsets/UTF_8)))
                 (gen/return [fs search-dir])))))
 
-(deftest title-test
-  (testing "title generated tests"
-    (is (check `se/title
-               {:gen {::se/article article-gen}}))))
-
-(deftest normalize-test
-  (testing "normalize generated tests"
-    (is (check `se/normalize))))
-
-(deftest tokenize-and-rank-test
-  (testing "tokenize-and-rank generated tests"
-    (is (check `se/tokenize-and-rank
-               {:gen {::se/article article-gen}}))))
-
-(deftest build-index-test
-  (testing "build-index generated tests"
-    (is (check `se/build-index
-               {:gen {::se/build-index-args #(gen/vector (file-gen)
-                                                         1)}}))))
-
-(deftest search-test
-  (testing "search generated tests"
-    (is (check `se/search
-               {:gen {::se/search-arguments search-args-gen}}))))
+(deftest generated-tests
+  (testing "generated-tests"
+    (is (check [`se/title
+                `se/normalize
+                `se/tokenize-and-rank
+                `se/build-index
+                `se/search]))))
 
 (deftest read-files
   (testing "read-files generated tests"

@@ -1,6 +1,7 @@
 (ns com.potetm.search-engine
   (:require [clojure.string :as str]
-            [clojure.spec :as spec])
+            [clojure.spec :as spec]
+            [clojure.spec.gen :as sgen])
   (:import (java.util Scanner)
            (java.nio.charset StandardCharsets)
            (java.nio.file Files
@@ -14,8 +15,11 @@
             #(not (.contains % "\n"))))
 
 (spec/def ::article
-  (spec/and string?
-            #(.contains % "\n")))
+  (spec/with-gen
+    (spec/and string?
+              #(.contains % "\n"))
+    #(sgen/fmap (partial str/join "\n")
+                (sgen/vector (sgen/string)))))
 
 (spec/fdef title
   :args (spec/cat :article ::article)
@@ -37,8 +41,11 @@
   (str/lower-case s))
 
 (spec/def ::token
-  (spec/and string?
-            (partial re-matches #"[a-z0-9]+")))
+  (spec/with-gen
+    (spec/and string?
+              (partial re-matches #"[a-z0-9]+"))
+    #(sgen/fmap str/lower-case
+                (sgen/string-alphanumeric))))
 
 (spec/def ::rank
   (spec/and integer?
@@ -94,15 +101,33 @@
                :conform-keys true))
 
 (spec/def ::index
-  (spec/keys :req
-             [::doc-id->attributes
-              ::inverted-index]))
-
-(spec/def ::build-index-args
-  (spec/cat :files (spec/coll-of ::file)))
+  (spec/with-gen
+    (spec/keys :req
+               [::doc-id->attributes
+                ::inverted-index])
+    (fn []
+      (sgen/fmap (fn [index]
+                   (let [doc-ids (set (mapcat (comp keys second)
+                                              index))]
+                     {::doc-id->attributes (if (seq doc-ids)
+                                             (sgen/generate
+                                               (spec/gen ::doc-id->attributes
+                                                         {::doc-id #(sgen/elements doc-ids)}))
+                                             {})
+                      ::inverted-index index}))
+                 (spec/gen ::inverted-index)))))
 
 (spec/fdef build-index
-  :args ::build-index-args
+  :args (spec/with-gen
+          (spec/cat :files (spec/coll-of ::file))
+          #(sgen/fmap (fn [filenames]
+                        [(map (fn [f]
+                                {::filename f
+                                 ::article (sgen/generate (spec/gen ::article))})
+                              filenames)])
+                      (sgen/vector-distinct
+                        (sgen/such-that (complement str/blank?)
+                                        (sgen/string-alphanumeric)))))
   :ret ::index
   :fn (fn [{{:keys [files]} :args
             {:keys [::doc-id->attributes
@@ -194,10 +219,6 @@
                  ::article article})))
           (iterator-seq (.iterator (Files/list search-path))))))
 
-(spec/def ::search-arguments
-  (spec/cat :index ::index
-            :word string?))
-
 (spec/def ::search-result
   (spec/keys :req
              [::doc-id
@@ -206,7 +227,17 @@
               ::rank]))
 
 (spec/fdef search
-  :args ::search-arguments
+  :args (spec/with-gen
+          (spec/cat :index ::index
+                    :word string?)
+          #(sgen/fmap (fn [[index include-word? rando-word]]
+                        (let [inverted-index-keys (keys (::inverted-index index))]
+                          [index (if (and include-word? (seq inverted-index-keys))
+                                   (sgen/generate (sgen/elements inverted-index-keys))
+                                   rando-word)]))
+                      (sgen/tuple (spec/gen ::index)
+                                  (sgen/boolean)
+                                  (sgen/string-alphanumeric))))
   :ret (spec/coll-of ::search-result)
   :fn (fn [{{{:keys [::inverted-index
                      ::doc-id->attributes]} :index
