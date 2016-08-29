@@ -19,7 +19,9 @@
     (spec/and string?
               #(.contains % "\n"))
     #(sgen/fmap (partial str/join "\n")
-                (sgen/vector (sgen/string)))))
+                (sgen/vector (sgen/string)
+                             0
+                             100))))
 
 (spec/fdef title
   :args (spec/cat :article ::article)
