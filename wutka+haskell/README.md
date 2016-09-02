@@ -4,17 +4,20 @@ This is a Haskell implementation of the search, using the same basic data
 structures as my Elixir solution, which is a modified version of the one
 we did at the August 2016 meeting.
 
-It takes almost 4 minutes to load the dictionary, compared to 1 minute for
-the Elixir version. This program was a lesson in the difficulties in reasoning
-about Haskell performance. I am using Data.Map.Strict and foldl' which are both
-supposed to do strict evaluation. When I first ran the program, before making it
-do things in batches, it ran out of memory quickly (on a 16G machine).
-I eventually figured out that there was a large amount of lazy data that was
-taking up the memory. When I added some code to process the files in batches and
-traverse the map and print some statistics, the memory utilization was much more
-sane. I eventually changed it to use deepseq to traverse the maps rather than
-printing the data. I still don't know what the actual problem is, however (assuming
-that Data.Map.Strict and foldl' are actually strict).
+I managed to shave a minute off the load time, so now this loads in a
+little under 3 minutes on my 8-core machine. Although I use seq in several
+places to try to keep things strict, I was able to remove the use of deepseq.
+Although the performance is roughly the same, I kept a change where instead of
+keeping the entries in a list, and using list concatenation when merging maps
+together, I created a tree structure where two trees can be merged just by creating
+a new node. The expense of joining them together is deferred until the search time.
+
+Because I was able to reduce the memory consumption, I was able to remove the
+batch processing of files and just use mapConcurrently.
+
+The thing that improved the performance was switching the readFile function
+I was using from a strict one that returned a String to a strict one that
+returns a ByteString (which is much more memory efficient).
 
 To build the program:
 stack build
@@ -26,7 +29,7 @@ If you play around with trying to track down the lazy data, you may want to run 
 a heap restriction in place, like:
 stack exec -- searcher-exe +RTS -M8G
 
-Once it loads (almost 4 minutes on my 8-core, 16G machine), it will prompt for a search
+Once it loads (almost 3 minutes on my 8-core, 16G machine), it will prompt for a search
 term and will print the top 10 results:
 
 To try it out:

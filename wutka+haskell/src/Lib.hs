@@ -1,82 +1,60 @@
 module Lib where
 
 import qualified Data.Map.Strict as Map
-import Data.ByteString.Char8 (ByteString, splitWith, unpack, pack, length)
-import Data.List
-import Data.List.Split
+import Data.ByteString.Char8
+import qualified Data.ByteString.Char8 as BS
+import qualified Data.List as List
 import Data.Char
 import Control.Concurrent.Async
-import Control.Concurrent.ParallelIO.Local
 import Control.Monad
-import Control.Applicative
-import Control.DeepSeq
 import System.Directory
-import qualified System.IO.Strict as StrictIO
 
-type IndexEntry = (ByteString,Int)
-type WordIndex = Map.Map ByteString [IndexEntry]
+data EntryType = EntryEmpty | EntryFile ByteString Int | EntryNode EntryType EntryType
+type WordIndex = Map.Map ByteString EntryType
 type FileIndex = Map.Map ByteString Int
+
+-- Converts a tree of EntryTypes to a list
+entryNodeToList :: EntryType -> [(ByteString,Int)]
+entryNodeToList EntryEmpty = []
+entryNodeToList (EntryFile bs c) = [(bs,c)]
+entryNodeToList (EntryNode left right) =
+  (entryNodeToList left) ++ (entryNodeToList right)
 
 -- Looks up a term in the word index and returns all the entries sorted from most- to
 -- least- frequent
-search :: ByteString -> WordIndex -> [IndexEntry]
+search :: ByteString -> WordIndex -> [(ByteString,Int)]
 search term index =
-  sortOn sortFunc findItem
+  List.sortOn sortFunc (entryNodeToList findItem)
     where
-      findItem = Map.findWithDefault [] term index
+      findItem = Map.findWithDefault EntryEmpty term index
       sortFunc (f,i) = -i
 
 -- Splits a string into an array of words, using any non-letter as a separator
 tokenize :: ByteString -> [ByteString]
 tokenize str =
-  filter (\s -> Data.ByteString.Char8.length s > 0) $ splitWith (not . isLetter) str
+  List.filter (\bs -> (BS.length bs) > 0) $ splitWith (not . isLetter) str
 
 -- Loads a file and creates a map counting the frequency of each word
-loadFile :: String -> IO (ByteString,FileIndex)
+loadFile :: String -> IO WordIndex
 loadFile filename = do
-  text <- StrictIO.readFile filename
-  let title = pack $ head (lines text)
-  let words = tokenize $ pack $ map toLower text
-  let wordMap = foldl' addWord Map.empty words
-  return (title,wordMap)
+  text <- BS.readFile filename
+  let title = BS.takeWhile (\c -> (c /= '\n') && (c /= '\r')) text
+  let words = tokenize $ BS.map toLower text
+  let tempWordMap = List.foldl' addWord Map.empty words
+  return $ Map.map (addTitle title) tempWordMap
       where
-        addWord wordMap word = Map.insertWith (+) word 1 wordMap
+        addWord wordMap word = Map.insertWith (\n o -> n `seq` o `seq` n+o) word 1 wordMap
+        addTitle title c = title `seq` c `seq` EntryFile title c
 
--- Loads a batch of files in parallel
-loadIndexBatch :: [String] -> WordIndex -> IO WordIndex
-loadIndexBatch files currMap = do
-  tasks <- mapM async (map loadFile files)
-  indexes <- mapM wait tasks
-  return (createIndex currMap indexes)
-
--- Loads the next batch of files and uses deepseq to make sure the index isn't lazy
-loadBatches :: [[String]] -> WordIndex -> IO WordIndex
-loadBatches [] currMap = do
-  return currMap
-
-loadBatches (files:rest) currMap = do
-  nextMap <- loadIndexBatch files currMap
-  nextMap `deepseq` loadBatches rest nextMap
+-- Adds two EntryType trees together
+mergeEntries :: EntryType -> EntryType -> EntryType
+mergeEntries left right =
+  left `seq` right `seq` EntryNode left right
 
 -- Loads all the files in ../sample
 loadIndex :: IO WordIndex
 loadIndex = do
   dirContents <- getDirectoryContents "../sample"
-  files <- filterM doesFileExist $ map (\f -> "../sample/"++f) dirContents
-  loadBatches (chunksOf 1000 files) Map.empty
-
--- Adds a file index to the word index. The file index is just words and counts, like:
--- { "foo": 5, "bar": 6, "baz": 3, "quux": 2}
--- The word index is keyed by word, and the entries are title,count pairs, like:
--- { "foo": [("Metavariables": 5, "Adventure": 3)], "baz": [("Metavariables": 3)] }
-addToIndex :: WordIndex -> (ByteString, FileIndex) -> WordIndex
-addToIndex index (title,wordMap) =
-  foldl' addItem index (Map.toList wordMap)
-    where
-      addItem currIndex (word,count) = Map.insertWith (++) word [(title,count)] currIndex
--- Takes a list of file indexes and adds them to an existing word index
-createIndex :: WordIndex -> [(ByteString, FileIndex)] -> WordIndex
-createIndex startMap wordMaps =
-  foldl' addToIndex startMap wordMaps
-
-
+  files <- filterM doesFileExist $ List.map (\f -> "../sample/"++f) dirContents
+  indexes <- mapConcurrently loadFile files
+  return $ Map.unionsWith mergeEntries indexes
